@@ -1,6 +1,7 @@
 import os
 import json
-import re from bs4 import BeautifulSoup
+import re 
+from bs4 import BeautifulSoup
 import sys
 from datetime import datetime
 

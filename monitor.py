@@ -45,31 +45,17 @@ def resolve_bvid(short_url: str) -> str:
 from bs4 import BeautifulSoup  # 放到文件顶部 import 部分
 
 def get_view_count(bvid: str) -> int:
-    """从 B 站视频页面解析播放量"""
-    url = f"https://www.bilibili.com/video/{bvid}"
-    resp = requests.get(url, headers=HEADERS, timeout=15)
+    """通过 B站 archive/stat 接口获取播放量"""
+    api = "https://api.bilibili.com/x/web-interface/archive/stat"
+    params = {"bvid": bvid}
+    resp = requests.get(api, params=params, headers=HEADERS, timeout=15)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
+    data = resp.json()
 
-    # B 站页面中有多个地方可能包含播放量，常见的有 meta 标签或 script 变量
-    # 尝试从 meta 标签读取
-    meta_view = soup.find("meta", {"itemprop": "interactionCount"})
-    if meta_view and meta_view.get("content"):
-        return int(meta_view["content"])
+    if data.get("code") != 0:
+        raise RuntimeError(f"B站API错误 {data.get('code')}: {data.get('message')}")
 
-    # 或者从 script 中解析 window.__INITIAL_STATE__ 里的 view 字段
-    script_text = soup.find("script", string=re.compile(r"window\.__INITIAL_STATE__"))
-    if script_text:
-        match = re.search(r'"view":(\d+)', script_text.string)
-        if match:
-            return int(match.group(1))
-
-    # 如果上述都失败，尝试找 class 为 view 的元素（不推荐，容易变）
-    view_el = soup.find("span", class_="view")
-    if view_el:
-        return int(view_el.get("title", "0").replace(",", ""))
-
-    raise RuntimeError("未能从页面解析出播放量")
+    return int(data["data"]["view"])
 
 def send_wechat(title: str, content: str):
     if SERVERCHAN_SENDKEY:

@@ -44,18 +44,18 @@ def resolve_bvid(short_url: str) -> str:
 
 from bs4 import BeautifulSoup  # 放到文件顶部 import 部分
 
-def get_view_count(bvid: str) -> int:
-    """通过 B站 archive/stat 接口获取播放量"""
-    api = "https://api.bilibili.com/x/web-interface/archive/stat"
+def get_view_count(bvid: str, session: requests.Session) -> int:
+    """使用带 Cookie 的会话获取播放量"""
+    api = "https://api.bilibili.com/x/web-interface/view"
     params = {"bvid": bvid}
-    resp = requests.get(api, params=params, headers=HEADERS, timeout=15)
+    resp = session.get(api, params=params, headers=HEADERS, timeout=15)
     resp.raise_for_status()
     data = resp.json()
 
     if data.get("code") != 0:
         raise RuntimeError(f"B站API错误 {data.get('code')}: {data.get('message')}")
 
-    return int(data["data"]["view"])
+    return int(data["data"]["stat"]["view"])
 
 def send_wechat(title: str, content: str):
     if SERVERCHAN_SENDKEY:
@@ -88,6 +88,13 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def main():
+    # 创建会话并访问B站首页，获取必要的Cookie
+session = requests.Session()
+try:
+    session.get("https://www.bilibili.com/", headers=HEADERS, timeout=15)
+    print("成功访问B站首页，获取Cookie")
+except Exception as e:
+    print(f"访问B站首页失败（可能不影响后续）: {e}")
     print("解析短链接...")
     bvids = {}
     for name, short_url in VIDEOS.items():
@@ -102,7 +109,7 @@ def main():
     current_views = {}
     for name, bvid in bvids.items():
         try:
-            current_views[name] = get_view_count(bvid)
+            current_views[name] = get_view_count(bvid, session)
             print(f"  {name}: {current_views[name]:,}")
         except Exception as e:
             print(f"获取失败 {name}: {e}")

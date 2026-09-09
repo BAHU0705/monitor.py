@@ -1,7 +1,6 @@
 import os
 import json
-import re 
-from bs4 import BeautifulSoup
+import re
 import sys
 from datetime import datetime
 
@@ -34,6 +33,7 @@ HEADERS = {
 }
 
 def resolve_bvid(short_url: str) -> str:
+    """把 b23.tv 短链接解析成 BV 号"""
     resp = requests.get(short_url, headers=HEADERS, allow_redirects=True, timeout=15)
     all_urls = [resp.url] + [h.url for h in resp.history]
     for url in all_urls:
@@ -41,8 +41,6 @@ def resolve_bvid(short_url: str) -> str:
         if m:
             return m.group(1)
     raise ValueError(f"未能从短链接解析出BV号: {short_url} -> {resp.url}")
-
-from bs4 import BeautifulSoup  # 放到文件顶部 import 部分
 
 def get_view_count(bvid: str, session: requests.Session) -> int:
     """使用带 Cookie 的会话获取播放量"""
@@ -58,6 +56,7 @@ def get_view_count(bvid: str, session: requests.Session) -> int:
     return int(data["data"]["stat"]["view"])
 
 def send_wechat(title: str, content: str):
+    """发送微信提醒，使用 Server酱 或 PushPlus"""
     if SERVERCHAN_SENDKEY:
         try:
             url = f"https://sctapi.ftqq.com/{SERVERCHAN_SENDKEY}.send"
@@ -65,6 +64,7 @@ def send_wechat(title: str, content: str):
             print("微信推送成功（Server酱）")
         except Exception as e:
             print(f"微信推送失败（Server酱）: {e}")
+
     if PUSHPLUS_TOKEN:
         try:
             url = "http://www.pushplus.plus/send"
@@ -88,22 +88,24 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def main():
-    # 创建会话并访问B站首页，获取必要的Cookie
-session = requests.Session()
-try:
-    session.get("https://www.bilibili.com/", headers=HEADERS, timeout=15)
-    print("成功访问B站首页，获取Cookie")
-except Exception as e:
-    print(f"访问B站首页失败（可能不影响后续）: {e}")
     print("解析短链接...")
     bvids = {}
     for name, short_url in VIDEOS.items():
         try:
-            bvids[name] = resolve_bvid(short_url)
-            print(f"  {name} -> {bvids[name]}")
+            bvid = resolve_bvid(short_url)
+            bvids[name] = bvid
+            print(f"  {name} -> {bvid}")
         except Exception as e:
             print(f"解析失败 {name}: {e}")
             sys.exit(1)
+
+    # 创建会话并访问B站首页，获取必要的Cookie
+    session = requests.Session()
+    try:
+        session.get("https://www.bilibili.com/", headers=HEADERS, timeout=15)
+        print("成功访问B站首页，获取Cookie")
+    except Exception as e:
+        print(f"访问B站首页失败（可能不影响后续）: {e}")
 
     print("获取播放量...")
     current_views = {}
@@ -157,6 +159,7 @@ except Exception as e:
     full_msg = f"[{now_str}] B站播放量播报\n" + "\n".join(lines)
     print(full_msg)
 
+    # 发送微信推送
     if SERVERCHAN_SENDKEY or PUSHPLUS_TOKEN:
         if alerts:
             alert_msg = "\n".join(alerts)
